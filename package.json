@@ -1,0 +1,16 @@
+{
+  "name": "github-pages-metadata-generator",
+  "version": "1.0.0",
+  "description": "Gerador de metadados para arquivos no GitHub Pages",
+  "main": "generate_metadata.js",
+  "scripts": {
+    "start": "node generate_metadata.js"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
