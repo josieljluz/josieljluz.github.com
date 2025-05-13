@@ -43,7 +43,7 @@ jobs:
     - name: Adicionar timestamp nos arquivos
       run: |
         for file in $(find playlists -type f); do
-          echo "# Atualizado em $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$file"
+          echo "# Atualizado em $(date -u '+%d-%m-%Y %H:%M:%S UTC')" >> "$file"
         done
 
     - name: Verificar mudanças no Git
