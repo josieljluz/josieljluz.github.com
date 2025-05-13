@@ -10,8 +10,6 @@ const config = {
     'files_metadata.json',
     'generate_metadata.js',
     'package.json',
-    'playlists.py',
-    'iMPlayer.py',
     'package-lock.json'
   ],
   itemsPerPage: 15
@@ -53,7 +51,6 @@ const formatDate = (isoString) => {
 };
 
 const getFileIcon = (filename) => {
-const getFileIcon = (filename) => {
   const extension = filename.split('.').pop().toLowerCase();
   const icons = {
     pdf: '📄',
@@ -63,9 +60,6 @@ const getFileIcon = (filename) => {
     txt: '📑',
     zip: '🗜️', rar: '🗜️', '7z': '🗜️',
     exe: '⚙️', msi: '⚙️',
-    apk: '📱', apks: '📱',
-    py: '🐍',
-    m3u: '🎶', m3u8: '🎶',
     jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️',
     mp3: '🎵', wav: '🎵',
     mp4: '🎬', avi: '🎬', mkv: '🎬',
