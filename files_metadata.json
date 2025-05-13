@@ -203,6 +203,13 @@
     "download_url": "https://raw.githubusercontent.com/josieljluz/josieljluz.github.io/main/josieljluz.m3u"
   },
   {
+    "name": "playlists.py",
+    "path": "playlists.py",
+    "size": 3636,
+    "lastModified": "2025-05-13T14:01:58Z",
+    "download_url": "https://raw.githubusercontent.com/josieljluz/josieljluz.github.io/main/playlists.py"
+  },
+  {
     "name": "requirements.txt",
     "path": "requirements.txt",
     "size": 26,
