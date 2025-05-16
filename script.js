@@ -1,214 +1,259 @@
 // Configurações
 const config = {
   metadataFile: 'files_metadata.json',
-  excludedFiles: [
-    'index.html',
-    '.gitignore',
-    'README.md',
-    'style.css',
-    'script.js',
-    'files_metadata.json',
-    'generate_metadata.js',
-    'package.json',
-    'package-lock.json'
-  ],
-  itemsPerPage: 15
+  itemsPerPage: 20,
+  defaultSort: 'name'
 };
 
 // Estado da aplicação
-let filesCache = [];
-let currentSort = 'name';
+let allFiles = [];
 let currentPage = 1;
+let currentSort = config.defaultSort;
 let currentSearchTerm = '';
 
 // Elementos DOM
 const fileList = document.getElementById('file-list');
 const searchInput = document.getElementById('search');
 const sortSelect = document.getElementById('sort');
+const itemsPerPageSelect = document.getElementById('items-per-page');
+const loadingElement = document.getElementById('loading');
+const totalFilesElement = document.getElementById('total-files');
+const totalSizeElement = document.getElementById('total-size');
+const lastUpdateElement = document.getElementById('last-update');
+const buildDateElement = document.getElementById('build-date');
 
-// Funções auxiliares
-const formatBytes = (bytes) => {
-  if (typeof bytes !== 'number' || isNaN(bytes)) return 'Tamanho desconhecido';
+// Formatar bytes para tamanho legível
+function formatBytes(bytes) {
+  if (isNaN(bytes)) return 'Tamanho desconhecido';
   if (bytes === 0) return '0 B';
   
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(
-    parseInt(Math.floor(Math.log(bytes) / Math.log(1024)), 10),
-    sizes.length - 1
-  );
-  return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
-};
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
 
-const formatDate = (isoString) => {
+// Formatar data
+function formatDate(isoString) {
   if (!isoString) return 'Data desconhecida';
   
   try {
     const date = new Date(isoString);
-    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   } catch (e) {
     return 'Data inválida';
   }
-};
+}
 
-const getFileIcon = (filename) => {
+// Obter ícone para o tipo de arquivo
+function getFileIcon(filename) {
   const extension = filename.split('.').pop().toLowerCase();
   const icons = {
     pdf: '📄',
-    doc: '📝', docx: '📝',
-    xls: '📊', xlsx: '📊',
-    ppt: '📊', pptx: '📊',
+    doc: '📝',
+    docx: '📝',
+    xls: '📊',
+    xlsx: '📊',
+    ppt: '📽️',
+    pptx: '📽️',
     txt: '📑',
-    zip: '🗜️', rar: '🗜️', '7z': '🗜️',
-    exe: '⚙️', msi: '⚙️',
-    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️',
-    mp3: '🎵', wav: '🎵',
-    mp4: '🎬', avi: '🎬', mkv: '🎬',
-    default: '📁'
+    csv: '📊',
+    json: '🔣',
+    js: '📜',
+    html: '🌐',
+    css: '🎨',
+    zip: '🗜️',
+    rar: '🗜️',
+    '7z': '🗜️',
+    exe: '⚙️',
+    dll: '🔧',
+    png: '🖼️',
+    jpg: '🖼️',
+    jpeg: '🖼️',
+    gif: '🖼️',
+    svg: '🖼️',
+    mp3: '🎵',
+    wav: '🎵',
+    mp4: '🎬',
+    avi: '🎬',
+    mkv: '🎬',
+    mov: '🎬',
+    iso: '💿',
+    dmg: '💿',
+    apk: '📱',
+    apks: '📱',
+    torrent: '🔽',
+    py: '🐍',
+    java: '☕',
+    c: '🔧',
+    cpp: '🔧',
+    h: '🔧',
+    sh: '💻',
+    bat: '💻',
+    ps1: '💻',
+    md: '📝',
+    yml: '⚙️',
+    yaml: '⚙️',
+    xml: '📄',
+    sql: '🗃️',
+    db: '🗃️',
+    sqlite: '🗃️',
+    log: '📋',
+    ini: '⚙️',
+    cfg: '⚙️',
+    conf: '⚙️',
+    rtf: '📝',
+    odt: '📝',
+    ods: '📊',
+    odp: '📽️',
+    default: '📄'
   };
   return icons[extension] || icons.default;
-};
+}
 
-// Funções de ordenação
-const sortFiles = (files, method) => {
+// Ordenar arquivos
+function sortFiles(files, method) {
   const sorted = [...files];
   
   switch(method) {
-    case 'name':
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
-    case 'nameDesc':
-      return sorted.sort((a, b) => b.name.localeCompare(a.name));
-    case 'date':
-      return sorted.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
-    case 'dateOldest':
-      return sorted.sort((a, b) => new Date(a.lastModified) - new Date(b.lastModified));
-    case 'size':
-      return sorted.sort((a, b) => (b.size || 0) - (a.size || 0));
-    case 'sizeSmallest':
-      return sorted.sort((a, b) => (a.size || 0) - (b.size || 0));
-    default:
-      return sorted;
+    case 'name': return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case 'nameDesc': return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case 'date': return sorted.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+    case 'dateOldest': return sorted.sort((a, b) => new Date(a.lastModified) - new Date(b.lastModified));
+    case 'size': return sorted.sort((a, b) => (b.size || 0) - (a.size || 0));
+    case 'sizeSmallest': return sorted.sort((a, b) => (a.size || 0) - (b.size || 0));
+    case 'type': return sorted.sort((a, b) => (a.file_type || '').localeCompare(b.file_type || ''));
+    case 'typeDesc': return sorted.sort((a, b) => (b.file_type || '').localeCompare(a.file_type || ''));
+    default: return sorted;
   }
-};
+}
 
-// Funções de paginação
-const paginateFiles = (files, page, perPage) => {
-  const start = (page - 1) * perPage;
-  const end = start + perPage;
-  return files.slice(start, end);
-};
+// Atualizar estatísticas
+function updateStats() {
+  const totalSize = allFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+  const lastModified = allFiles.length > 0 
+    ? new Date(Math.max(...allFiles.map(f => new Date(f.lastModified))))
+    : null;
+  
+  totalFilesElement.textContent = allFiles.length;
+  totalSizeElement.textContent = formatBytes(totalSize);
+  lastUpdateElement.textContent = lastModified ? formatDate(lastModified) : 'N/A';
+  buildDateElement.textContent = formatDate(new Date().toISOString());
+}
 
-const renderPagination = (totalItems, currentPage, itemsPerPage) => {
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+// Atualizar controles de paginação
+function updatePagination() {
+  const itemsPerPage = parseInt(itemsPerPageSelect.value);
+  const totalPages = Math.ceil(allFiles.length / itemsPerPage);
   const paginationControls = document.getElementById('pagination-controls');
+  const paginationInfo = document.getElementById('pagination-info');
   
   if (totalPages <= 1) {
     paginationControls.innerHTML = '';
+    paginationInfo.textContent = '';
     return;
   }
   
+  // Criar botões de paginação
   let buttons = [];
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+  
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
   
   // Botão anterior
-  buttons.push(
-    `<button class="pagination-button" ${currentPage === 1 ? 'disabled' : ''} 
-     data-page="${currentPage - 1}">«</button>`
-  );
+  buttons.push(`
+    <button class="pagination-button" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">
+      &laquo; Anterior
+    </button>
+  `);
   
-  // Páginas
-  const maxVisibleButtons = 5;
-  let startPage = Math.max(1, currentPage - 2);
-  let endPage = Math.min(totalPages, currentPage + 2);
-  
-  if (currentPage <= 3) {
-    endPage = Math.min(5, totalPages);
-  } else if (currentPage >= totalPages - 2) {
-    startPage = Math.max(totalPages - 4, 1);
-  }
-  
+  // Primeira página
   if (startPage > 1) {
-    buttons.push('<button class="pagination-button" data-page="1">1</button>');
-    if (startPage > 2) buttons.push('<span class="pagination-ellipsis">...</span>');
+    buttons.push(`<button class="pagination-button" data-page="1">1</button>`);
+    if (startPage > 2) {
+      buttons.push(`<span class="pagination-ellipsis">...</span>`);
+    }
   }
   
+  // Páginas intermediárias
   for (let i = startPage; i <= endPage; i++) {
-    buttons.push(
-      `<button class="pagination-button ${i === currentPage ? 'active' : ''}" 
-       data-page="${i}">${i}</button>`
-    );
+    buttons.push(`
+      <button class="pagination-button ${i === currentPage ? 'active' : ''}" data-page="${i}">
+        ${i}
+      </button>
+    `);
   }
   
+  // Última página
   if (endPage < totalPages) {
-    if (endPage < totalPages - 1) buttons.push('<span class="pagination-ellipsis">...</span>');
+    if (endPage < totalPages - 1) {
+      buttons.push(`<span class="pagination-ellipsis">...</span>`);
+    }
     buttons.push(`<button class="pagination-button" data-page="${totalPages}">${totalPages}</button>`);
   }
   
   // Botão próximo
-  buttons.push(
-    `<button class="pagination-button" ${currentPage === totalPages ? 'disabled' : ''} 
-     data-page="${currentPage + 1}">»</button>`
-  );
+  buttons.push(`
+    <button class="pagination-button" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">
+      Próximo &raquo;
+    </button>
+  `);
   
   paginationControls.innerHTML = buttons.join('');
-  
-  // Informações de paginação
-  const startItem = (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
-  const infoText = `Mostrando ${startItem}-${endItem} de ${totalItems} arquivos`;
-  
-  let infoElement = paginationControls.nextElementSibling;
-  if (!infoElement || !infoElement.classList.contains('pagination-info')) {
-    infoElement = document.createElement('div');
-    infoElement.className = 'pagination-info';
-    paginationControls.after(infoElement);
-  }
-  infoElement.textContent = infoText;
-};
+  paginationInfo.textContent = `Página ${currentPage} de ${totalPages} | ${allFiles.length} arquivos`;
+}
 
-// Renderização
-const renderFiles = () => {
-  let filesToRender = [...filesCache];
+// Renderizar arquivos
+function renderFiles() {
+  // Filtrar por termo de busca
+  let filteredFiles = currentSearchTerm
+    ? allFiles.filter(file => file.name.toLowerCase().includes(currentSearchTerm.toLowerCase()))
+    : [...allFiles];
   
-  // Aplicar filtro de busca
-  if (currentSearchTerm) {
-    const term = currentSearchTerm.toLowerCase();
-    filesToRender = filesToRender.filter(file => 
-      file.name.toLowerCase().includes(term)
-    );
-  }
+  // Ordenar
+  filteredFiles = sortFiles(filteredFiles, currentSort);
   
-  // Aplicar ordenação
-  filesToRender = sortFiles(filesToRender, currentSort);
+  // Paginar
+  const itemsPerPage = parseInt(itemsPerPageSelect.value);
+  const startIdx = (currentPage - 1) * itemsPerPage;
+  const paginatedFiles = filteredFiles.slice(startIdx, startIdx + itemsPerPage);
   
-  // Verificar se há arquivos
-  if (filesToRender.length === 0) {
-    fileList.innerHTML = '<li class="error-message">Nenhum arquivo encontrado.</li>';
-    document.getElementById('pagination-controls').innerHTML = '';
-    return;
-  }
-  
-  // Aplicar paginação
-  const paginatedFiles = paginateFiles(filesToRender, currentPage, config.itemsPerPage);
-  
-  // Renderizar arquivos
+  // Renderizar
   fileList.innerHTML = paginatedFiles.map(file => `
-    <li>
-      <a href="${file.download_url}" target="_blank" rel="noopener noreferrer">
+    <li class="file-item">
+      <a href="${file.download_url}" target="_blank" rel="noopener noreferrer" class="file-link">
         <span class="file-icon">${getFileIcon(file.name)}</span>
-        ${file.name}
+        <span class="file-name">${file.name}</span>
       </a>
       <div class="file-details">
-        <span>📏 ${formatBytes(file.size)}</span>
-        <span>🕒 ${formatDate(file.lastModified)}</span>
+        <span class="file-size">📏 ${formatBytes(file.size)}</span>
+        <span class="file-date">🕒 ${formatDate(file.lastModified)}</span>
+        <span class="file-type">🗂️ ${file.file_type || 'desconhecido'}</span>
       </div>
     </li>
   `).join('');
   
-  // Renderizar controles de paginação
-  renderPagination(filesToRender.length, currentPage, config.itemsPerPage);
-};
+  // Atualizar paginação
+  updatePagination();
+  
+  // Atualizar estatísticas
+  updateStats();
+  
+  // Esconder loading
+  loadingElement.style.display = 'none';
+}
 
 // Event listeners
-const setupEventListeners = () => {
+function setupEventListeners() {
   searchInput.addEventListener('input', (e) => {
     currentSearchTerm = e.target.value;
     currentPage = 1;
@@ -217,6 +262,11 @@ const setupEventListeners = () => {
   
   sortSelect.addEventListener('change', (e) => {
     currentSort = e.target.value;
+    renderFiles();
+  });
+  
+  itemsPerPageSelect.addEventListener('change', () => {
+    currentPage = 1;
     renderFiles();
   });
   
@@ -231,39 +281,62 @@ const setupEventListeners = () => {
       }
     }
   });
-};
+}
 
 // Carregar metadados
-const loadFilesMetadata = async () => {
+async function loadFilesMetadata() {
   try {
     const response = await fetch(config.metadataFile);
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
-    const data = await response.json();
-    
-    filesCache = data
-      .filter(file => !config.excludedFiles.includes(file.name))
-      .map(file => ({
-        ...file,
-        icon: getFileIcon(file.name)
-      }));
+    allFiles = await response.json();
     
     renderFiles();
   } catch (error) {
     console.error('Erro ao carregar metadados:', error);
-    fileList.innerHTML = `
-      <li class="error-message">
+    loadingElement.innerHTML = `
+      <div class="error-message">
         Erro ao carregar arquivos. Por favor, recarregue a página.
         <button onclick="window.location.reload()">Recarregar</button>
-      </li>
+      </div>
     `;
   }
-};
+}
 
 // Inicialização
-const init = () => {
+function init() {
   setupEventListeners();
   loadFilesMetadata();
-};
+}
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ========== TEMA ==========
+const themeSelect = document.getElementById("theme");
+
+function applyTheme(theme) {
+  if (theme === "dark") {
+    document.documentElement.classList.add("dark");
+  } else if (theme === "light") {
+    document.documentElement.classList.remove("dark");
+  } else {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.classList.toggle("dark", prefersDark);
+  }
+}
+
+const savedTheme = localStorage.getItem("theme") || "system";
+themeSelect.value = savedTheme;
+applyTheme(savedTheme);
+
+themeSelect.addEventListener("change", () => {
+  const selected = themeSelect.value;
+  localStorage.setItem("theme", selected);
+  applyTheme(selected);
+});
+
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (localStorage.getItem("theme") === "system") {
+    applyTheme("system");
+  }
+});

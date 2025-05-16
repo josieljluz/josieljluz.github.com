@@ -1,99 +1,75 @@
 const fs = require('fs');
 const path = require('path');
-const { Octokit } = require('@octokit/rest');
 
-// Configurações
+// Configurações do projeto
 const config = {
-  owner: 'josieljluz',
-  repo: 'josieljluz.github.io',
-  branch: 'main',
+  outputFile: 'files_metadata.json',
   excludedFiles: [
     'index.html',
-    '.gitignore',
-    'README.md',
     'style.css',
     'script.js',
+    '.gitlab-ci.yaml',
     'files_metadata.json',
     'generate_metadata.js',
     'package.json',
-    'package-lock.json'
+    'package-lock.json',
+    '.gitlab-ci.yml',
+    '.gitignore',
+    'Gemfile',
+    '_config.yml',
+    'README.md',
+    'playlists.py',
+    'requirements.txt',
+    'Gemfile.lock'
   ],
-  outputFile: 'files_metadata.json'
+  githubUser: 'josieljluz',
+  githubRepo: 'josieljluz.github.io',
+  branch: process.env.CI_COMMIT_REF_NAME || 'main'
 };
 
-// Autenticação
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-  userAgent: 'GitHub-Files-Metadata-Generator'
-});
+// Função para listar arquivos localmente
+function getLocalFiles() {
+  const allFiles = fs.readdirSync('.', { withFileTypes: true });
 
-async function getFileMetadata() {
+  return allFiles
+    .filter(dirent => dirent.isFile())
+    .map(dirent => dirent.name)
+    .filter(file => !config.excludedFiles.includes(file))
+    .map(file => ({
+      name: file,
+      path: file,
+      size: fs.statSync(file).size,
+      lastModified: fs.statSync(file).mtime.toISOString(),
+      download_url: `https://raw.githubusercontent.com/${config.githubUser}/${config.githubRepo}/${config.branch}/${file}`,
+      file_type: path.extname(file).toLowerCase().replace('.', '') || 'file'
+    }));
+}
+
+// Gerar metadados
+function generateMetadata() {
   try {
-    console.log('Iniciando geração de metadados...');
-    
-    // Obter lista de arquivos
-    const { data: files } = await octokit.rest.repos.getContent({
-      owner: config.owner,
-      repo: config.repo,
-      ref: config.branch
-    });
+    console.log('⏳ Iniciando geração de metadados...');
 
-    console.log(`Total de itens encontrados: ${files.length}`);
+    const filesMetadata = getLocalFiles();
 
-    // Filtrar apenas arquivos (não diretórios) e excluir os não desejados
-    const fileList = files.filter(item => 
-      item.type === 'file' && !config.excludedFiles.includes(item.name)
-    );
-
-    console.log(`Arquivos a processar após filtro: ${fileList.length}`);
-
-    // Obter metadados para cada arquivo
-    const filesMetadata = [];
-    
-    for (const file of fileList) {
-      try {
-        console.log(`Processando: ${file.name}`);
-        
-        // Obter informações de commit mais recente
-        const { data: commits } = await octokit.rest.repos.listCommits({
-          owner: config.owner,
-          repo: config.repo,
-          path: file.path,
-          per_page: 1
-        });
-
-        filesMetadata.push({
-          name: file.name,
-          path: file.path,
-          size: file.size,
-          lastModified: commits[0]?.commit?.committer?.date || new Date().toISOString(),
-          download_url: file.download_url
-        });
-      } catch (error) {
-        console.error(`Erro ao processar ${file.name}:`, error.message);
-        // Adiciona informações básicas mesmo com erro
-        filesMetadata.push({
-          name: file.name,
-          path: file.path,
-          size: file.size,
-          lastModified: new Date().toISOString(),
-          download_url: file.download_url
-        });
-      }
-    }
-
-    // Salvar metadados em arquivo JSON
     fs.writeFileSync(
       path.join(__dirname, config.outputFile),
       JSON.stringify(filesMetadata, null, 2)
     );
 
-    console.log(`Metadados gerados com sucesso em ${config.outputFile}`);
-    console.log(`Total de arquivos processados: ${filesMetadata.length}`);
+    console.log(`✅ Metadados gerados com sucesso em ${config.outputFile}`);
+    console.log(`📊 Total de arquivos processados: ${filesMetadata.length}`);
+
+    // Lista de arquivos para debug
+    console.log('📝 Arquivos incluídos:');
+    filesMetadata.forEach(file => {
+      console.log(`- ${file.name} (${file.file_type})`);
+    });
+
   } catch (error) {
-    console.error('Erro crítico ao gerar metadados:', error);
+    console.error('❌ Erro ao gerar metadados:', error);
     process.exit(1);
   }
 }
 
-getFileMetadata();
+generateMetadata();
